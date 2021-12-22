@@ -11,7 +11,7 @@ class Solver(object):
     def __init__(self, args, model, use_gpu, optimizer, logger):
         audio_data_trainval = AudioDataset(s1_scp='./data/M2Met/dev.scp',stage='dev')
 
-        audio_data_pretrain = AudioDataset(s1_scp='./data/M2Met/dev.scp',stage='train')
+        audio_data_pretrain = AudioDataset(s1_scp='./data/M2Met/train.scp',stage='train')
         # audio_data_trainval = AudioDataset(s1_ref='./data/audio/trainval_s1_aux.scp',s1_scp='./data/audio/trainval_s1.scp',
         #                 mix_scp='./data/audio/trainval_mix.scp',s2_ref='./data/audio/trainval_s2_aux.scp',s2_scp='./data/audio/trainval_s2.scp')
 
