@@ -2,6 +2,12 @@
 
 import random
 import os
+from simulation_room import simulation
+import soundfile as sf 
+import multiprocessing as mp
+from concurrent.futures.process import ProcessPoolExecutor
+from functools import partial
+
 
 def generate_speaker(wav_scp_path,output):
     speakerid_list = set()
@@ -37,7 +43,7 @@ def split_train_dev(wav_scp_path,output, rate=0.8):
             train_list.append(line)
             train_speaker_list.add(speaker)
         else:
-            if number<=0.9:
+            if number<=rate:
                 train_list.append(line)
             else:
                 dev_list.append(line)
@@ -68,13 +74,55 @@ def generate_noise(path,output):
     print('finish generate noise list !!!')
 
 
+def _simu(tmp,output_path):
+    os.makedirs(output_path,exist_ok=True)
+    name=tmp[0]
+    data_path=tmp[1]
+    # global new_data_dict
+    
+    wav_name = data_path.strip().split('/')[-1]
+
+    data,sr= sf.read(data_path)
+    if (len(data)/sr <1):
+        return
+    else:
+        new_data = simulation(data)
+        data_ = new_data.transpose(1,0)
+        sf.write(os.path.join(output_path,wav_name),data_,16000)
+
+        # new_data_dict[name] = os.path.join(output_path,wav_name)
+        print('save '+str(os.path.join(output_path,wav_name)))
+
+
+def simulation_multichannel(wav_scp_path,out_folder,output_dir,num_process):
+    data_list=[]
+    with open(wav_scp_path,'r') as p:
+        for line in p.readlines():
+            name,path = line.strip().split(' ')
+            data_list.append([name,path])
+    with ProcessPoolExecutor(num_process) as ex:
+        func = partial(_simu, output_path=out_folder)
+        ex.map(func, data_list)
+
+    new_data_list=os.listdir(out_folder)
+    with open(os.path.join(output_dir,'name_wav.scp'),'w') as p:
+        for file in new_data_list:
+            name = file.strip().split('/')[-1].split('.wav')[0]
+            path = os.path.join(out_folder,file)
+            p.write(str(name)+' '+str(path)+'\n')
+
+
+
+
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser('M2met')
-    parser.add_argument('--wav_scp_path',type=str,help='the path of wav_scp')
-    parser.add_argument('--noise_data',type=str,help='the path of noise_data')
+    parser.add_argument('--wav_scp_path',type=str,help='the path of wav_scp',default='/CDShare2/M2MeT_codes/espnet/egs2/AliMeeting/asr/dump2/raw/org/Train_Ali_near_nooverlap_onechannel/wav.scp')
+    parser.add_argument('--noise_data',type=str,default='/CDShare2/OpenSLR/28/RIRS_NOISES/pointsource_noises',help='the path of noise_data')
     parser.add_argument('--output_dir',type=str,default='./data/M2Met')
+    parser.add_argument('--out_multichannel_folder',type=str,default='./multichannel')
+    parser.add_argument('--num_process',type=int,default=64,help='the number of multi_process')
     args = parser.parse_args()
 
     # wav_scp_path = '/CDShare2/M2MeT_codes/espnet/egs2/AliMeeting/asr/dump2/raw/org/Train_Ali_near_nooverlap_onechannel/wav.scp'
@@ -86,10 +134,16 @@ if __name__ == "__main__":
 
     #step1 生成speaker名称列表
     generate_speaker(args.wav_scp_path,args.output_dir) 
-    #step2 分割训练集 验证集
-    split_train_dev(args.wav_scp_path,args.output_dir,rate=0.9)  
-    #step3 生成对应噪声列表
+
+    #step2 模拟多通道数据
+    simulation_multichannel(args.wav_scp_path,args.out_multichannel_folder,args.output_dir,args.num_process)
+
+
+    # #step3 分割训练集 验证集
+    split_train_dev(os.path.join(args.output_dir,'name_wav.scp'),args.output_dir,rate=0.95)  
+    # # #step4 生成对应噪声列表
     generate_noise(args.noise_data,args.output_dir)  
+
 
     print('FINISH DATA PREPARATION!')
 
